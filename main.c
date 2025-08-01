@@ -13,42 +13,42 @@
 uint16_t memory[mem_max];
 
 enum {
-  reg_r0 = 0,
-  reg_r1,
-  reg_r2,
-  reg_r3,
-  reg_r4,
-  reg_r5,
-  reg_r6,
-  reg_r7,
-  reg_progcount,
-  reg_cond,
-  reg_count,
+  R_R0 = 0,
+  R_R1,
+  R_R2,
+  R_R3,
+  R_R4,
+  R_R5,
+  R_R6,
+  R_R7,
+  R_PC, /* prog counter */
+  R_COND,
+  R_COUNT
 };
 
-uint16_t reg[reg_count];
+uint16_t reg[R_COUNT];
 
 enum {
-  fl_pos = 1 << 0,
-  fl_zr = 1 << 1,
-  fl_neg = 1 << 2,
+  FL_POS = 1 << 0,
+  FL_ZRO = 1 << 1,
+  FL_NEG = 1 << 2,
 };
 
 enum {
-  op_branch = 0,
-  op_add,
-  op_load,
-  op_store,
-  op_and,
-  op_loadreg,
-  op_storereg,
-  op_un, /* unused */
-  op_not,
-  op_loadi,  /* load indirect */
-  op_storei, /* store indirect */
-  op_jump,
-  op_res,  /*reserved */
-  op_lea,  /*load effective addr */
-  op_trap, /*trap execution */
-
+  OP_BR = 0, /* branch */
+  OP_ADD,
+  OP_LD,  /* load */
+  OP_ST,  /* store */
+  OP_JSR, /* jump reg */
+  OP_AND, /* bitwise and */
+  OP_LDR, /* load reg */
+  OP_STR, /* store reg*/
+  OP_RTI, /* unused */
+  OP_NOT, /* bitwise not */
+  OP_LDI, /* load indirect */
+  OP_STI, /* store indirect */
+  OP_JMP, /* jump */
+  OP_RES, /* reserved (unused) */
+  OP_LEA, /* load effective addr*/
+  OP_TRAP /* execute trap */
 };
