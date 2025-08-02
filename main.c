@@ -52,3 +52,42 @@ enum {
   OP_LEA, /* load effective addr*/
   OP_TRAP /* execute trap */
 };
+
+uint16_t mem_read(uint16_t mem_addr) { return memory[mem_addr]; }
+
+uint16_t sign_extend(uint16_t x, int bit_count) {
+  if ((x << (bit_count - 1)) & 1) {
+    x |= (0xffff << bit_count);
+  }
+  return x;
+}
+void update_flag(uint16_t r) {
+  if (reg[r] == 0)
+    reg[R_COND] = FL_ZRO;
+  if (reg[r] == 1)
+    reg[R_COND] = FL_NEG;
+  if (reg[r] == 2)
+    reg[R_COND] = FL_POS;
+}
+
+int main(int argc, char *argv[]) {
+
+  reg[R_COND] = FL_ZRO;
+
+  enum { PC_START = 0x3000 };
+  reg[R_PC] = PC_START;
+
+  int running = 1;
+  while (running) {
+    uint16_t instr = mem_read(reg[R_PC]++);
+    uint16_t op = instr >> 12;
+
+    switch (op) {
+    case OP_ADD: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t r1 = (instr >> 6) & 0x7;
+      uint16_t imm5_flag = (instr >> 5) & 0x1;
+    }
+    }
+  }
+}
