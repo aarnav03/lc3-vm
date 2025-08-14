@@ -69,6 +69,7 @@ void update_flag(uint16_t r) {
   if (reg[r] == 2)
     reg[R_COND] = FL_POS;
 }
+void writemem(uint16_t addr, uint16_t val) { memory[addr] = val; }
 
 int main(int argc, char *argv[]) {
 
@@ -84,9 +85,38 @@ int main(int argc, char *argv[]) {
 
     switch (op) {
     case OP_ADD: {
+      // ADD R2 R0 R1 ; add the contents of R0 to R1 and store in R2.
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t r1 = (instr >> 6) & 0x7;
       uint16_t imm5_flag = (instr >> 5) & 0x1;
+      break;
+    }
+    case OP_AND: {
+      uint16_t r0 = (instr >> 9) & 0x7; // destination reg
+      uint16_t r1 = (instr >> 6) & 0x7;
+      uint16_t imm5_flag = (instr >> 5) & 0x1;
+      if (imm5_flag) {
+        uint16_t imm = sign_extend(instr & 0x1f, 5);
+      } else {
+        uint r2 = instr & 0x7;
+        reg[r2] = reg[r0] & reg[r1];
+      }
+    }
+    case OP_BR: {
+      // todo:
+      // explain and figure this guy out
+      uint16_t pcOffset = sign_extend(instr & 0x1ff, 9); // cuz it is signed
+      uint16_t condFlag = (instr >> 9) & 0x7;
+
+      if (condFlag & pcOffset)
+        reg[R_PC] += pcOffset;
+      break;
+    }
+    case OP_JMP: {
+      // idhar se udhar jane ko kehta
+      uint16_t r0 = (instr >> 6) & 0x7;
+      reg[R_PC] = reg[r0];
+      break;
     }
     }
   }
