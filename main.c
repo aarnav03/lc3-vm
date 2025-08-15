@@ -36,21 +36,21 @@ enum {
 
 enum {
   OP_BR = 0, /* branch */
-  OP_ADD,
-  OP_LD,  /* load */
-  OP_ST,  /* store */
-  OP_JSR, /* jump reg */
-  OP_AND, /* bitwise and */
-  OP_LDR, /* load reg */
-  OP_STR, /* store reg*/
-  OP_RTI, /* unused */
-  OP_NOT, /* bitwise not */
-  OP_LDI, /* load indirect */
-  OP_STI, /* store indirect */
-  OP_JMP, /* jump */
-  OP_RES, /* reserved (unused) */
-  OP_LEA, /* load effective addr*/
-  OP_TRAP /* execute trap */
+  OP_ADD,    // x
+  OP_LD,     /* load x */
+  OP_ST,     /* store x */
+  OP_JSR,    /* jump reg x */
+  OP_AND,    /* bitwise and x */
+  OP_LDR,    /* load reg x */
+  OP_STR,    /* store reg x */
+  OP_RTI,    /* unused */
+  OP_NOT,    /* bitwise not x */
+  OP_LDI,    /* load indirect x */
+  OP_STI,    /* store indirect */
+  OP_JMP,    /* jump */
+  OP_RES,    /* reserved (unused) */
+  OP_LEA,    /* load effective addr x */
+  OP_TRAP    /* execute trap */
 };
 
 uint16_t mem_read(uint16_t mem_addr) { return memory[mem_addr]; }
@@ -182,8 +182,9 @@ int main(int argc, char *argv[]) {
     }
     case OP_STR: {
       uint16_t r0 = (instr >> 9) & 0x7;
-      uint16_t r2 = (instr >> 6) & 0x7;
-      uint16_t offset = sign_extend(instr & 0x1f, 6);
+      uint16_t r1 = (instr >> 6) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x3f, 6);
+      memwrite(reg[r0], reg[r1] + offset);
       break;
     }
     }
