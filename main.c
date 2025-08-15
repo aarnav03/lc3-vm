@@ -69,7 +69,7 @@ void update_flag(uint16_t r) {
   if (reg[r] == 2)
     reg[R_COND] = FL_POS;
 }
-void writemem(uint16_t addr, uint16_t val) { memory[addr] = val; }
+void memwrite(uint16_t addr, uint16_t val) { memory[addr] = val; }
 
 int main(int argc, char *argv[]) {
 
@@ -112,10 +112,78 @@ int main(int argc, char *argv[]) {
         reg[R_PC] += pcOffset;
       break;
     }
+
     case OP_JMP: {
       // idhar se udhar jane ko kehta
       uint16_t r0 = (instr >> 6) & 0x7;
       reg[R_PC] = reg[r0];
+      break;
+    }
+
+    case OP_JSR: {
+      uint16_t flag = (instr >> 11) & 1;
+      reg[R_R7] = reg[R_PC];
+      if (flag) {
+        uint16_t offset = sign_extend(instr & 0x7ff, 11);
+        reg[R_PC] += offset;
+      } else {
+        uint r0 = (instr >> 6) & 0x7;
+        reg[R_PC] = reg[r0];
+      }
+      break;
+    }
+    case OP_LD: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x1ff, 9);
+      reg[r0] = mem_read(reg[r0] + offset);
+      update_flag(r0);
+      break;
+    }
+    case OP_LDI: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x1ff, 9);
+      reg[r0] = mem_read(mem_read(reg[r0] + offset));
+      update_flag(r0);
+      break;
+    }
+    case OP_LDR: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t r1 = (instr >> 6) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x3f, 6);
+      reg[r0] = mem_read(reg[r1] + offset);
+      update_flag(r0);
+      break;
+    }
+    case OP_LEA: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x1ff, 9);
+      reg[r0] = reg[R_PC] + offset;
+      update_flag(r0);
+      break;
+    }
+    case OP_NOT: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t r1 = (instr >> 6) & 0x7;
+      reg[r0] = ~reg[r1];
+      update_flag(r0);
+      break;
+    }
+    case OP_ST: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x1ff, 9);
+      memwrite(reg[r0], reg[R_PC] + offset);
+      break;
+    }
+    case OP_STI: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x1ff, 9);
+      memwrite(reg[r0], mem_read(reg[R_PC] + offset));
+      break;
+    }
+    case OP_STR: {
+      uint16_t r0 = (instr >> 9) & 0x7;
+      uint16_t r2 = (instr >> 6) & 0x7;
+      uint16_t offset = sign_extend(instr & 0x1f, 6);
       break;
     }
     }
