@@ -89,6 +89,14 @@ int main(int argc, char *argv[]) {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t r1 = (instr >> 6) & 0x7;
       uint16_t imm5_flag = (instr >> 5) & 0x1;
+      if (imm5_flag) {
+        uint16_t imm = sign_extend(instr & 0x1f, 5);
+        reg[r0] = reg[r1] + imm;
+      } else {
+        uint16_t r2 = (instr & 0x7);
+        reg[r0] = reg[r1] + reg[r2];
+      }
+      update_flag(r0);
       break;
     }
     case OP_AND: {
