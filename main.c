@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <iso646.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,8 +10,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define mem_max (1 << 16)
-uint16_t memory[mem_max];
+#define MEM_MAX (1 << 16)
+uint16_t memory[MEM_MAX];
 
 enum {
   R_R0 = 0,
@@ -24,6 +25,14 @@ enum {
   R_PC, /* prog counter */
   R_COND,
   R_COUNT
+};
+enum {
+  trap_getc = 0x20,  // get char from kb, not echoed back to term
+  trap_out = 0x21,   // output char
+  trap_puts = 0x22,  // output words/string
+  trap_in = 0x23,    // get char from kb,echo back to term
+  trap_putsp = 0x24, // output a byte string
+  trap_halt = 0x25,  // stop/halt the prog
 };
 
 uint16_t reg[R_COUNT];
@@ -70,6 +79,23 @@ void update_flag(uint16_t r) {
     reg[R_COND] = FL_POS;
 }
 void memwrite(uint16_t addr, uint16_t val) { memory[addr] = val; }
+
+uint16_t swap16(uint16_t x) { return (x << 8) | (x >> 8); }
+
+void readImgFile(FILE *fh) {
+  uint16_t orig;
+  fread(&orig, sizeof(orig), 1, fh);
+  orig = swap16(orig);
+
+  uint16_t readMax = MEM_MAX - orig;
+  uint16_t *dest = memory + orig;
+  uint16_t read = fread(dest, sizeof(uint16_t), readMax, fh);
+
+  while (read-- > 0) {
+    *dest = swap16(*dest);
+    ++dest;
+  }
+}
 
 int main(int argc, char *argv[]) {
 
@@ -194,6 +220,58 @@ int main(int argc, char *argv[]) {
       uint16_t offset = sign_extend(instr & 0x3f, 6);
       memwrite(reg[r0], reg[r1] + offset);
       break;
+    }
+    }
+
+    reg[R_R7] = reg[R_PC];
+    switch (instr & 0xff) {
+    case trap_puts: {
+      uint16_t *ch = memory + reg[R_R0];
+      while (*ch) {
+        putc(*ch, stdout);
+        ++ch;
+      }
+
+      fflush(stdout);
+      break;
+    }
+    case trap_getc: {
+      reg[R_R0] = (uint16_t)getchar();
+      update_flag(R_R0);
+
+      break;
+    }
+    case trap_in: {
+      printf("enter char");
+      char c = getchar();
+      putc(c, stdout);
+      fflush(stdout);
+      reg[R_R0] = (uint16_t)c;
+      update_flag(R_R0);
+      break;
+    }
+    case trap_out: {
+      putc((char)(reg[R_R0]), stdout);
+      fflush(stdout);
+      break;
+    }
+    case trap_putsp: {
+      uint16_t *c = memory + reg[R_R0];
+      while (*c) {
+        char c1 = *c & 0xff;
+        putc(c1, stdout);
+        char c2 = *c >> 8;
+        if (c2)
+          putc(c2, stdout);
+
+        ++c;
+      }
+      fflush(stdout);
+    }
+    case trap_halt: {
+      puts("halting");
+      fflush(stdout);
+      running = 0;
     }
     }
   }
