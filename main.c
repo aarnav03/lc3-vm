@@ -105,7 +105,7 @@ uint16_t mem_read(uint16_t addr) {
 }
 
 uint16_t sign_extend(uint16_t x, int bit_count) {
-  if ((x << (bit_count - 1)) & 1) {
+  if ((x >> (bit_count - 1)) & 1) {
     x |= (0xffff << bit_count);
   }
   return x;
@@ -118,7 +118,7 @@ void update_flag(uint16_t r) {
   else
     reg[R_COND] = FL_POS;
 }
-void memwrite(uint16_t addr, uint16_t val) { memory[addr] = val; }
+void memwrite(uint16_t val, uint16_t addr) { memory[addr] = val; }
 
 uint16_t swap16(uint16_t x) { return (x << 8) | (x >> 8); }
 
@@ -164,6 +164,7 @@ int main(int argc, char *argv[]) {
     }
   }
   signal(SIGINT, interruptHandle);
+  enableRaw();
 
   reg[R_COND] = FL_ZRO;
 
@@ -196,10 +197,12 @@ int main(int argc, char *argv[]) {
       uint16_t imm5_flag = (instr >> 5) & 0x1;
       if (imm5_flag) {
         uint16_t imm = sign_extend(instr & 0x1f, 5);
+        reg[r0] = reg[r1] & imm;
       } else {
-        uint r2 = instr & 0x7;
-        reg[r2] = reg[r0] & reg[r1];
+        uint16_t r2 = instr & 0x7;
+        reg[r0] = reg[r1] & reg[r2];
       }
+      update_flag(r0);
     } break;
     case OP_BR: {
       // todo:
@@ -207,7 +210,7 @@ int main(int argc, char *argv[]) {
       uint16_t pcOffset = sign_extend(instr & 0x1ff, 9); // cuz it is signed
       uint16_t condFlag = (instr >> 9) & 0x7;
 
-      if (condFlag & pcOffset)
+      if (condFlag & reg[R_COND])
         reg[R_PC] += pcOffset;
     } break;
 
@@ -231,13 +234,13 @@ int main(int argc, char *argv[]) {
     case OP_LD: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t offset = sign_extend(instr & 0x1ff, 9);
-      reg[r0] = mem_read(reg[r0] + offset);
+      reg[r0] = mem_read(reg[R_PC] + offset);
       update_flag(r0);
     } break;
     case OP_LDI: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t offset = sign_extend(instr & 0x1ff, 9);
-      reg[r0] = mem_read(mem_read(reg[r0] + offset));
+      reg[r0] = mem_read(mem_read(reg[R_PC] + offset));
       update_flag(r0);
     } break;
     case OP_LDR: {
@@ -282,7 +285,7 @@ int main(int argc, char *argv[]) {
       case trap_puts: {
         uint16_t *ch = memory + reg[R_R0];
         while (*ch) {
-          putc(*ch, stdout);
+          putc((char)*ch, stdout);
           ++ch;
         }
 
