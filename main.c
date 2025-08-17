@@ -1,3 +1,4 @@
+#include <bits/types/struct_timeval.h>
 #include <fcntl.h>
 #include <iso646.h>
 #include <signal.h>
@@ -5,9 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <sys/select.h>
 #include <sys/termios.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <termios.h>
 #include <unistd.h>
 
 #define MEM_MAX (1 << 16)
@@ -62,7 +65,44 @@ enum {
   OP_TRAP    /* execute trap */
 };
 
-uint16_t mem_read(uint16_t mem_addr) { return memory[mem_addr]; }
+enum {
+  MR_KBSR = 0xfe00, // tells if a key is pressed
+  MR_KBDR = 0xfe02, // which key is pressed
+
+};
+
+struct termios term_og;
+
+void disableRaw(void) {
+  tcgetattr(STDIN_FILENO, &term_og);
+  struct termios term_new = term_og;
+  term_new.c_lflag &= ~ICANON & ~ECHO;
+  tcsetattr(STDIN_FILENO, TCSANOW, &term_new);
+}
+void enableRaw(void) { tcsetattr(STDIN_FILENO, TCSANOW, &term_og); }
+
+uint16_t check_key(void) {
+  fd_set fdr;
+  FD_ZERO(&fdr);
+  FD_SET(STDOUT_FILENO, &fdr);
+
+  struct timeval timeout;
+  timeout.tv_sec = 0;
+  timeout.tv_usec = 0;
+  return select(1, &fdr, NULL, NULL, &timeout) != 0;
+}
+
+uint16_t mem_read(uint16_t addr) {
+  if (addr == MR_KBSR) {
+    if (check_key()) {
+      memory[MR_KBSR] = 1 << 15;
+      memory[MR_KBDR] = getchar();
+    } else {
+      memory[MR_KBSR] = 0;
+    }
+  }
+  return memory[addr];
+}
 
 uint16_t sign_extend(uint16_t x, int bit_count) {
   if ((x << (bit_count - 1)) & 1) {
@@ -87,17 +127,43 @@ void readImgFile(FILE *fh) {
   fread(&orig, sizeof(orig), 1, fh);
   orig = swap16(orig);
 
-  uint16_t readMax = MEM_MAX - orig;
-  uint16_t *dest = memory + orig;
-  uint16_t read = fread(dest, sizeof(uint16_t), readMax, fh);
+  uint16_t memMax = MEM_MAX - orig;
+  uint16_t *data = memory + orig;
+  uint16_t i = fread(data, sizeof(uint16_t), memMax, fh);
 
-  while (read-- > 0) {
-    *dest = swap16(*dest);
-    ++dest;
+  // swap the data
+  while (i-- > 0) {
+    *data = swap16(*data);
+    ++data;
   }
 }
+int readImg(const char *imagePath) {
+  FILE *fh = fopen(imagePath, "rb");
+  if (!fh)
+    return 0;
 
+  readImgFile(fh);
+  fclose(fh);
+  return 1;
+}
+void interruptHandle(int signal) {
+  enableRaw();
+  printf("\n");
+  exit(3);
+}
 int main(int argc, char *argv[]) {
+
+  if (argc < 2) {
+    printf("./main [img file] \n");
+    exit(-1);
+  }
+  for (int i = 1; i < argc; ++i) {
+    if (!readImg(argv[i])) {
+      printf("error loading img");
+      exit(2);
+    }
+  }
+  signal(SIGINT, interruptHandle);
 
   reg[R_COND] = FL_ZRO;
 
@@ -123,8 +189,7 @@ int main(int argc, char *argv[]) {
         reg[r0] = reg[r1] + reg[r2];
       }
       update_flag(r0);
-      break;
-    }
+    } break;
     case OP_AND: {
       uint16_t r0 = (instr >> 9) & 0x7; // destination reg
       uint16_t r1 = (instr >> 6) & 0x7;
@@ -135,7 +200,7 @@ int main(int argc, char *argv[]) {
         uint r2 = instr & 0x7;
         reg[r2] = reg[r0] & reg[r1];
       }
-    }
+    } break;
     case OP_BR: {
       // todo:
       // explain and figure this guy out
@@ -144,15 +209,13 @@ int main(int argc, char *argv[]) {
 
       if (condFlag & pcOffset)
         reg[R_PC] += pcOffset;
-      break;
-    }
+    } break;
 
     case OP_JMP: {
       // idhar se udhar jane ko kehta
       uint16_t r0 = (instr >> 6) & 0x7;
       reg[R_PC] = reg[r0];
-      break;
-    }
+    } break;
 
     case OP_JSR: {
       uint16_t flag = (instr >> 11) & 1;
@@ -164,115 +227,110 @@ int main(int argc, char *argv[]) {
         uint r0 = (instr >> 6) & 0x7;
         reg[R_PC] = reg[r0];
       }
-      break;
-    }
+    } break;
     case OP_LD: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t offset = sign_extend(instr & 0x1ff, 9);
       reg[r0] = mem_read(reg[r0] + offset);
       update_flag(r0);
-      break;
-    }
+    } break;
     case OP_LDI: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t offset = sign_extend(instr & 0x1ff, 9);
       reg[r0] = mem_read(mem_read(reg[r0] + offset));
       update_flag(r0);
-      break;
-    }
+    } break;
     case OP_LDR: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t r1 = (instr >> 6) & 0x7;
       uint16_t offset = sign_extend(instr & 0x3f, 6);
       reg[r0] = mem_read(reg[r1] + offset);
       update_flag(r0);
-      break;
-    }
+    } break;
     case OP_LEA: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t offset = sign_extend(instr & 0x1ff, 9);
       reg[r0] = reg[R_PC] + offset;
       update_flag(r0);
-      break;
-    }
+    } break;
     case OP_NOT: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t r1 = (instr >> 6) & 0x7;
       reg[r0] = ~reg[r1];
       update_flag(r0);
-      break;
-    }
+    } break;
     case OP_ST: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t offset = sign_extend(instr & 0x1ff, 9);
       memwrite(reg[r0], reg[R_PC] + offset);
-      break;
-    }
+    } break;
     case OP_STI: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t offset = sign_extend(instr & 0x1ff, 9);
       memwrite(reg[r0], mem_read(reg[R_PC] + offset));
-      break;
-    }
+    } break;
     case OP_STR: {
       uint16_t r0 = (instr >> 9) & 0x7;
       uint16_t r1 = (instr >> 6) & 0x7;
       uint16_t offset = sign_extend(instr & 0x3f, 6);
       memwrite(reg[r0], reg[r1] + offset);
-      break;
-    }
-    }
+    } break;
+    case OP_TRAP: {
 
-    reg[R_R7] = reg[R_PC];
-    switch (instr & 0xff) {
-    case trap_puts: {
-      uint16_t *ch = memory + reg[R_R0];
-      while (*ch) {
-        putc(*ch, stdout);
-        ++ch;
+      reg[R_R7] = reg[R_PC];
+      switch (instr & 0xff) {
+      case trap_puts: {
+        uint16_t *ch = memory + reg[R_R0];
+        while (*ch) {
+          putc(*ch, stdout);
+          ++ch;
+        }
+
+        fflush(stdout);
+      } break;
+      case trap_getc: {
+        reg[R_R0] = (uint16_t)getchar();
+        update_flag(R_R0);
+
+      } break;
+      case trap_in: {
+        printf("enter char");
+        char c = getchar();
+        putc(c, stdout);
+        fflush(stdout);
+        reg[R_R0] = (uint16_t)c;
+        update_flag(R_R0);
+      } break;
+      case trap_out: {
+        putc((char)(reg[R_R0]), stdout);
+        fflush(stdout);
+      } break;
+      case trap_putsp: {
+        uint16_t *c = memory + reg[R_R0];
+        while (*c) {
+          char c1 = *c & 0xff;
+          putc(c1, stdout);
+          char c2 = *c >> 8;
+          if (c2)
+            putc(c2, stdout);
+
+          ++c;
+        }
+        fflush(stdout);
+      } break;
+      case trap_halt: {
+        puts("halting");
+        fflush(stdout);
+        running = 0;
+      } break;
       }
-
-      fflush(stdout);
+    } break;
+    case OP_RES:
+    case OP_RTI:
+    default:
+      abort();
       break;
-    }
-    case trap_getc: {
-      reg[R_R0] = (uint16_t)getchar();
-      update_flag(R_R0);
-
-      break;
-    }
-    case trap_in: {
-      printf("enter char");
-      char c = getchar();
-      putc(c, stdout);
-      fflush(stdout);
-      reg[R_R0] = (uint16_t)c;
-      update_flag(R_R0);
-      break;
-    }
-    case trap_out: {
-      putc((char)(reg[R_R0]), stdout);
-      fflush(stdout);
-      break;
-    }
-    case trap_putsp: {
-      uint16_t *c = memory + reg[R_R0];
-      while (*c) {
-        char c1 = *c & 0xff;
-        putc(c1, stdout);
-        char c2 = *c >> 8;
-        if (c2)
-          putc(c2, stdout);
-
-        ++c;
-      }
-      fflush(stdout);
-    }
-    case trap_halt: {
-      puts("halting");
-      fflush(stdout);
-      running = 0;
-    }
     }
   }
+  enableRaw();
 }
