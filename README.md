@@ -1,11 +1,15 @@
 <!-- lc3 vm goes brr -->
 
-## LC3 is an architecture for vms
+## What  
+a simple implementation of a virtual machine which emulates the LC3 Architecture and its instruction set.
 
-instructions are in 16 bit form 
+it fetches -> decodes -> executes instructions like a CPU, but emulated in the form of a C programme. 
 
+---
+
+instructions are 16 bit long   
 example of an instruction
-```        0001 000 000 1 00101
+```     0001 000 000 1 00101
         ^^^^ ^^^ ^^^ ^ ^^^^^
         |    |   |   | |
         |    |   |   | immediate value 
@@ -14,7 +18,9 @@ example of an instruction
         |    destination register
         opcode 
 ```
+the particular opcode and source register can vary from instruction to instruction but this is a general representation
 
 
-specific codes can be extracted by using shift operators 
+
+
 
