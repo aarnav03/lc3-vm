@@ -73,18 +73,18 @@ enum {
 
 struct termios term_og;
 
-void disableRaw(void) {
+void enableRaw(void) {
   tcgetattr(STDIN_FILENO, &term_og);
   struct termios term_new = term_og;
   term_new.c_lflag &= ~ICANON & ~ECHO;
   tcsetattr(STDIN_FILENO, TCSANOW, &term_new);
 }
-void enableRaw(void) { tcsetattr(STDIN_FILENO, TCSANOW, &term_og); }
+void disbableRaw(void) { tcsetattr(STDIN_FILENO, TCSANOW, &term_og); }
 
 uint16_t check_key(void) {
   fd_set fdr;
   FD_ZERO(&fdr);
-  FD_SET(STDOUT_FILENO, &fdr);
+  FD_SET(STDIN_FILENO, &fdr);
 
   struct timeval timeout;
   timeout.tv_sec = 0;
@@ -113,9 +113,9 @@ uint16_t sign_extend(uint16_t x, int bit_count) {
 void update_flag(uint16_t r) {
   if (reg[r] == 0)
     reg[R_COND] = FL_ZRO;
-  if (reg[r] == 1)
+  else if (reg[r] >> 15)
     reg[R_COND] = FL_NEG;
-  if (reg[r] == 2)
+  else
     reg[R_COND] = FL_POS;
 }
 void memwrite(uint16_t addr, uint16_t val) { memory[addr] = val; }
@@ -147,20 +147,20 @@ int readImg(const char *imagePath) {
   return 1;
 }
 void interruptHandle(int signal) {
-  enableRaw();
+  disbableRaw();
   printf("\n");
-  exit(3);
+  exit(-2);
 }
 int main(int argc, char *argv[]) {
 
   if (argc < 2) {
     printf("./main [img file] \n");
-    exit(-1);
+    exit(2);
   }
   for (int i = 1; i < argc; ++i) {
     if (!readImg(argv[i])) {
       printf("error loading img");
-      exit(2);
+      exit(1);
     }
   }
   signal(SIGINT, interruptHandle);
@@ -275,7 +275,7 @@ int main(int argc, char *argv[]) {
       uint16_t offset = sign_extend(instr & 0x3f, 6);
       memwrite(reg[r0], reg[r1] + offset);
     } break;
-    case OP_TRAP: {
+    case OP_TRAP:
 
       reg[R_R7] = reg[R_PC];
       switch (instr & 0xff) {
@@ -318,13 +318,13 @@ int main(int argc, char *argv[]) {
         }
         fflush(stdout);
       } break;
-      case trap_halt: {
+      case trap_halt:
         puts("halting");
         fflush(stdout);
         running = 0;
-      } break;
+        break;
       }
-    } break;
+      break;
     case OP_RES:
     case OP_RTI:
     default:
@@ -332,5 +332,5 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-  enableRaw();
+  disbableRaw();
 }
